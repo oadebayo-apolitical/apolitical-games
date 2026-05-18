@@ -82,13 +82,16 @@ a {
   align-items: center;
   gap: 8px;
 }
-.wordmark::before {
+.wordmark:not(.is-home)::before {
   content: "←";
   color: var(--muted);
   font-weight: 600;
 }
-.topbar:hover .wordmark::before {
+.topbar:hover .wordmark:not(.is-home)::before {
   color: var(--ink);
+}
+.wordmark.is-home {
+  cursor: default;
 }
 .shell {
   width: 100%;

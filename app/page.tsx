@@ -20,7 +20,7 @@ const GAMES = [
 
 export default function Hub() {
   return (
-    <PageShell>
+    <PageShell home>
       <header className="bc">
         <h1>Apolitical Games</h1>
         <p>A little break between meetings.</p>
