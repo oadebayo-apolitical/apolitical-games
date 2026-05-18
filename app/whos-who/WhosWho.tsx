@@ -1,11 +1,31 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { isCorrectGuess, type Round } from "@/lib/personality";
 
 const MAX_ATTEMPTS = 5;
+// How many rounds to keep preloaded so Skip/Next feels instant.
+const BUFFER_TARGET = 2;
+
+async function fetchRound(): Promise<Round | null> {
+  try {
+    const res = await fetch("/api/personality", { cache: "no-store" });
+    if (!res.ok) return null;
+    return (await res.json()) as Round;
+  } catch {
+    return null;
+  }
+}
+
+// Warm the browser image cache so the photo is ready before it's shown.
+function warmImage(url?: string | null) {
+  if (url && typeof window !== "undefined") {
+    const img = new window.Image();
+    img.src = url;
+  }
+}
 type Phase = "playing" | "loading" | "error";
 type Status = "playing" | "won" | "lost";
 
@@ -20,21 +40,58 @@ export default function WhosWho({ initial }: { initial: Round }) {
   // Hint 0 is shown from the start; each wrong guess reveals the next.
   const revealed = Math.min(1 + attempts, round.hints.length);
 
-  const next = useCallback(async () => {
-    setPhase("loading");
-    try {
-      const res = await fetch("/api/personality", { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: Round = await res.json();
-      setRound(data);
-      setGuess("");
-      setAttempts(0);
-      setStatus("playing");
-      setPhase("playing");
-    } catch {
-      setPhase("error");
+  // Preloaded rounds (+ in-flight count) live in refs so topping up the
+  // buffer never triggers a re-render.
+  const bufferRef = useRef<Round[]>([]);
+  const inFlightRef = useRef(0);
+
+  const refill = useCallback(() => {
+    const need =
+      BUFFER_TARGET - bufferRef.current.length - inFlightRef.current;
+    for (let i = 0; i < need; i++) {
+      inFlightRef.current += 1;
+      fetchRound()
+        .then((r) => {
+          if (r) {
+            bufferRef.current.push(r);
+            warmImage(r.image?.url);
+          }
+        })
+        .finally(() => {
+          inFlightRef.current -= 1;
+        });
     }
   }, []);
+
+  const applyRound = useCallback((r: Round) => {
+    setRound(r);
+    setGuess("");
+    setAttempts(0);
+    setStatus("playing");
+    setPhase("playing");
+  }, []);
+
+  // Move to the next person — instant if the buffer has one; otherwise
+  // fall back to a foreground fetch with the loading state.
+  const next = useCallback(async () => {
+    const buffered = bufferRef.current.shift();
+    if (buffered) {
+      applyRound(buffered);
+      refill();
+      return;
+    }
+    setPhase("loading");
+    const r = await fetchRound();
+    if (r) applyRound(r);
+    else setPhase("error");
+    refill();
+  }, [applyRound, refill]);
+
+  // Start preloading on mount (also warms the SSR person's image).
+  useEffect(() => {
+    warmImage(initial.image?.url);
+    refill();
+  }, [initial.image?.url, refill]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
