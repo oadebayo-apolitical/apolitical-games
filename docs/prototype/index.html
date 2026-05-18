@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>British Connections</title>
+<style>
+  :root {
+    --yellow: #f9df6d;
+    --green:  #a0c35a;
+    --blue:   #b0c4ef;
+    --purple: #ba81c5;
+    --tile:   #efefe6;
+    --tile-sel: #5a594e;
+    --ink:    #121212;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #fff;
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 12px 40px;
+    min-height: 100%;
+  }
+  header { text-align: center; margin-bottom: 18px; }
+  h1 {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 30px;
+    letter-spacing: -0.5px;
+  }
+  header p { color: #666; font-size: 14px; margin-top: 4px; }
+  .stage { width: 100%; max-width: 540px; }
+  .instructions { text-align: center; font-size: 15px; margin-bottom: 12px; }
+
+  .solved-area { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  .solved {
+    border-radius: 6px;
+    padding: 12px 8px;
+    text-align: center;
+    color: var(--ink);
+    animation: drop 0.4s ease;
+  }
+  .solved.l0 { background: var(--yellow); }
+  .solved.l1 { background: var(--green); }
+  .solved.l2 { background: var(--blue); }
+  .solved.l3 { background: var(--purple); }
+  .solved .cat { font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; font-size: 15px; }
+  .solved .mem { font-size: 15px; margin-top: 2px; }
+  @keyframes drop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .tile {
+    aspect-ratio: 1 / 1;
+    border: none;
+    border-radius: 6px;
+    background: var(--tile);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: clamp(11px, 3.4vw, 18px);
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4px;
+    user-select: none;
+    transition: transform 0.08s ease;
+    word-break: break-word;
+    line-height: 1.05;
+  }
+  .tile:active { transform: scale(0.95); }
+  .tile.selected { background: var(--tile-sel); color: #fff; }
+  .tile.shake { animation: shake 0.4s ease; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%,60% { transform: translateX(-6px); }
+    40%,80% { transform: translateX(6px); }
+  }
+
+  .controls { display: flex; justify-content: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  button.ctrl {
+    border: 1px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 22px;
+    padding: 11px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.ctrl:disabled { border-color: #ccc; color: #ccc; cursor: not-allowed; }
+  button.ctrl.primary { background: var(--ink); color: #fff; }
+  button.ctrl.primary:disabled { background: #fff; }
+
+  .mistakes { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 20px; font-size: 15px; color: #444; }
+  .dot { width: 15px; height: 15px; border-radius: 50%; background: var(--tile-sel); }
+  .dot.used { background: #e0e0d8; }
+
+  .toast {
+    position: fixed;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+  }
+  .toast.show { opacity: 1; }
+
+  .endscreen { text-align: center; margin-top: 22px; }
+  .endscreen h2 { font-family: Georgia, serif; font-size: 24px; margin-bottom: 4px; }
+  .endscreen p { color: #666; margin-bottom: 14px; }
+  .resultgrid { display: inline-flex; flex-direction: column; gap: 4px; margin: 8px 0 18px; }
+  .resultrow { display: flex; gap: 4px; }
+  .sq { width: 26px; height: 26px; border-radius: 5px; }
+  .sq.l0 { background: var(--yellow); }
+  .sq.l1 { background: var(--green); }
+  .sq.l2 { background: var(--blue); }
+  .sq.l3 { background: var(--purple); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>British Connections</h1>
+    <p>Group the words into four. With a British accent.</p>
+  </header>
+
+  <div class="stage">
+    <p class="instructions" id="instructions">Create four groups of four!</p>
+    <div class="solved-area" id="solvedArea"></div>
+    <div class="grid" id="grid"></div>
+
+    <div class="controls" id="controls">
+      <button class="ctrl" id="shuffleBtn">Shuffle</button>
+      <button class="ctrl" id="deselectBtn" disabled>Deselect all</button>
+      <button class="ctrl primary" id="submitBtn" disabled>Submit</button>
+    </div>
+
+    <div class="mistakes" id="mistakesBar">
+      <span>Mistakes remaining:</span>
+      <span class="dot"></span><span class="dot"></span>
+      <span class="dot"></span><span class="dot"></span>
+    </div>
+
+    <div class="endscreen hidden" id="endscreen">
+      <h2 id="endTitle"></h2>
+      <p id="endSub"></p>
+      <div class="resultgrid" id="resultGrid"></div>
+      <div>
+        <button class="ctrl primary" id="newGameBtn">New game</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* Puzzle pool. Each group: level 0=yellow .. 3=purple, ascending difficulty.
+   Hand-authored with deliberate cross-group overlap traps. British lens. */
+const PUZZLES = [
+  [
+    { level: 0, name: "Chocolate bars", members: ["TWIRL","FLAKE","WISPA","CRUNCHIE"] },
+    { level: 1, name: "Birds", members: ["ROBIN","SWIFT","SWALLOW","WREN"] },
+    { level: 2, name: "Snooker terms", members: ["BREAK","POT","SCREW","KISS"] },
+    { level: 3, name: "Slang for money", members: ["QUID","DOSH","WONGA","BRASS"] },
+  ],
+  [
+    { level: 0, name: "Football positions", members: ["KEEPER","STRIKER","SWEEPER","WINGER"] },
+    { level: 1, name: "Names for a bread roll", members: ["BAP","COB","BARM","STOTTIE"] },
+    { level: 2, name: "___ City football clubs", members: ["LEEDS","HULL","NORWICH","STOKE"] },
+    { level: 3, name: "___ + POOL", members: ["LIVER","BLACK","WHIRL","CAR"] },
+  ],
+  [
+    { level: 0, name: "Old British money", members: ["BOB","TANNER","GROAT","FLORIN"] },
+    { level: 1, name: "Doctor Who actors", members: ["BAKER","TENNANT","SMITH","CAPALDI"] },
+    { level: 2, name: "London Underground lines", members: ["VICTORIA","CENTRAL","JUBILEE","DISTRICT"] },
+    { level: 3, name: "UNDER ___", members: ["GROUND","STAND","DOG","TAKER"] },
+  ],
+  [
+    { level: 0, name: "British sitcoms", members: ["BLACKADDER","MIRANDA","EXTRAS","SPACED"] },
+    { level: 1, name: "Full English fry-up", members: ["SAUSAGE","BEANS","TOAST","RASHER"] },
+    { level: 2, name: "Cricket terms", members: ["OVER","MAIDEN","DUCK","SLIP"] },
+    { level: 3, name: "___ + POT", members: ["JACK","CRACK","TEA","HOT"] },
+  ],
+  [
+    { level: 0, name: "Knackered (tired)", members: ["KNACKERED","SHATTERED","WHACKED","BUSHED"] },
+    { level: 1, name: "Traditional sweets", members: ["HUMBUG","GOBSTOPPER","SHERBET","ROCK"] },
+    { level: 2, name: "British rivers", members: ["SEVERN","THAMES","TRENT","OUSE"] },
+    { level: 3, name: "___ + SIDE", members: ["MERSEY","TYNE","COUNTRY","SEA"] },
+  ],
+  [
+    { level: 0, name: "Garden birds", members: ["MAGPIE","STARLING","SPARROW","FINCH"] },
+    { level: 1, name: "Royal houses", members: ["TUDOR","STUART","WINDSOR","YORK"] },
+    { level: 2, name: "Knots", members: ["REEF","GRANNY","BOW","HITCH"] },
+    { level: 3, name: "NEW ___ (UK places)", members: ["CASTLE","PORT","QUAY","BURY"] },
+  ],
+  [
+    { level: 0, name: "Premier League clubs", members: ["ARSENAL","EVERTON","CHELSEA","FULHAM"] },
+    { level: 1, name: "Tennis terms", members: ["ACE","LET","LOVE","FAULT"] },
+    { level: 2, name: "Slang for amounts of money", members: ["PONY","MONKEY","GRAND","TON"] },
+    { level: 3, name: "Hidden body part", members: ["SHINDIG","EARTH","HIPPY","ARMADA"] },
+  ],
+  [
+    { level: 0, name: "Found in a pub", members: ["PINT","DARTS","QUIZ","JUKEBOX"] },
+    { level: 1, name: "Snooker ball colours", members: ["PINK","BLUE","GREEN","BLACK"] },
+    { level: 2, name: "UK Prime Ministers", members: ["BROWN","MAJOR","MAY","BLAIR"] },
+    { level: 3, name: "BLACK ___", members: ["POOL","BIRD","SMITH","BERRY"] },
+  ],
+];
+
+let puzzle;          // [{level,name,members}]
+let memberToLevel;   // { WORD: level }
+let tiles;           // current ordered list of words still in the grid
+let selected;        // Set of selected words
+let solvedLevels;    // [levels] in solved order
+let guessHistory;    // [[level,level,level,level]] per submitted guess
+let mistakes;        // count
+const MAX_MISTAKES = 4;
+
+const $ = id => document.getElementById(id);
+const gridEl = $("grid");
+const solvedEl = $("solvedArea");
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function newGame() {
+  puzzle = PUZZLES[Math.floor(Math.random() * PUZZLES.length)];
+  memberToLevel = {};
+  for (const g of puzzle) for (const m of g.members) memberToLevel[m] = g.level;
+  tiles = shuffle(puzzle.flatMap(g => g.members.slice()));
+  selected = new Set();
+  solvedLevels = [];
+  guessHistory = [];
+  mistakes = 0;
+
+  solvedEl.innerHTML = "";
+  $("endscreen").classList.add("hidden");
+  $("controls").classList.remove("hidden");
+  $("mistakesBar").classList.remove("hidden");
+  $("instructions").textContent = "Create four groups of four!";
+  renderGrid();
+  renderMistakes();
+  syncButtons();
+}
+
+function renderGrid() {
+  gridEl.innerHTML = "";
+  for (const word of tiles) {
+    const b = document.createElement("button");
+    b.className = "tile" + (selected.has(word) ? " selected" : "");
+    b.textContent = word;
+    b.dataset.word = word;
+    b.addEventListener("click", () => toggle(word));
+    gridEl.appendChild(b);
+  }
+}
+
+function toggle(word) {
+  if (selected.has(word)) selected.delete(word);
+  else if (selected.size < 4) selected.add(word);
+  renderGrid();
+  syncButtons();
+}
+
+function syncButtons() {
+  $("submitBtn").disabled = selected.size !== 4;
+  $("deselectBtn").disabled = selected.size === 0;
+}
+
+function renderMistakes() {
+  const dots = $("mistakesBar").querySelectorAll(".dot");
+  dots.forEach((d, i) => d.classList.toggle("used", i >= MAX_MISTAKES - mistakes));
+}
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), 1600);
+}
+
+function shakeSelected() {
+  gridEl.querySelectorAll(".tile.selected").forEach(el => {
+    el.classList.add("shake");
+    el.addEventListener("animationend", () => el.classList.remove("shake"), { once: true });
+  });
+}
+
+function submitGuess() {
+  if (selected.size !== 4) return;
+  const picked = [...selected];
+  const levels = picked.map(w => memberToLevel[w]);
+  guessHistory.push(levels.slice());
+
+  const counts = {};
+  for (const lv of levels) counts[lv] = (counts[lv] || 0) + 1;
+  const maxSame = Math.max(...Object.values(counts));
+
+  if (maxSame === 4) {
+    lockInGroup(levels[0]);
+    selected.clear();
+    if (solvedLevels.length === 4) endGame(true);
+    else syncButtons();
+    return;
+  }
+
+  // Wrong guess
+  mistakes++;
+  renderMistakes();
+  shakeSelected();
+  if (maxSame === 3) toast("One away…");
+
+  if (mistakes >= MAX_MISTAKES) {
+    setTimeout(() => endGame(false), 450);
+  }
+}
+
+function lockInGroup(level) {
+  const group = puzzle.find(g => g.level === level);
+  solvedLevels.push(level);
+  tiles = tiles.filter(w => !group.members.includes(w));
+
+  const div = document.createElement("div");
+  div.className = "solved l" + level;
+  div.innerHTML =
+    '<div class="cat">' + group.name + '</div>' +
+    '<div class="mem">' + group.members.join(", ") + '</div>';
+  solvedEl.appendChild(div);
+  renderGrid();
+}
+
+function endGame(won) {
+  // Reveal any remaining groups in difficulty order.
+  const remaining = puzzle
+    .filter(g => !solvedLevels.includes(g.level))
+    .sort((a, b) => a.level - b.level);
+  for (const g of remaining) lockInGroup(g.level);
+
+  $("controls").classList.add("hidden");
+  $("mistakesBar").classList.add("hidden");
+  $("instructions").classList.add("hidden");
+
+  $("endTitle").textContent = won ? "Spot on!" : "Hard cheese.";
+  $("endSub").textContent = won
+    ? "Solved with " + mistakes + (mistakes === 1 ? " mistake." : " mistakes.")
+    : "Better luck next time, mate.";
+
+  const rg = $("resultGrid");
+  rg.innerHTML = "";
+  for (const row of guessHistory) {
+    const r = document.createElement("div");
+    r.className = "resultrow";
+    for (const lv of row) {
+      const s = document.createElement("div");
+      s.className = "sq l" + lv;
+      r.appendChild(s);
+    }
+    rg.appendChild(r);
+  }
+  $("endscreen").classList.remove("hidden");
+}
+
+$("submitBtn").addEventListener("click", submitGuess);
+$("deselectBtn").addEventListener("click", () => { selected.clear(); renderGrid(); syncButtons(); });
+$("shuffleBtn").addEventListener("click", () => { shuffle(tiles); renderGrid(); });
+$("newGameBtn").addEventListener("click", newGame);
+
+newGame();
+</script>
+</body>
+</html>
