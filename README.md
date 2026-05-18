@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# British Connections
 
-## Getting Started
+NYT-Connections-style word puzzle, localised through a British cultural lens —
+same game (categories, synonyms, wordplay), but wherever a reference would
+default to American it's British instead. Puzzles are generated live by Claude.
 
-First, run the development server:
+## Modes
+
+- **Daily** — one puzzle per UTC day, the same for everyone. Generated once and
+  served from Vercel Data Cache, so the whole team plays the identical puzzle.
+  Share your spoiler-free result grid in a chat (Wordle-style).
+- **Endless** — a freshly generated puzzle on demand, as many as you like.
+
+No database: there are no accounts, leaderboards, or stored scores, and
+refreshing lets you replay the daily.
+
+## Stack
+
+Next.js (App Router) · TypeScript · `@anthropic-ai/sdk` · deploy on Vercel.
+
+| Path | Role |
+| --- | --- |
+| `lib/connections.ts` | Pure game engine (selection, scoring, one-away, reveal). Unit-tested. |
+| `lib/puzzle.ts` | Puzzle types, structural validator, hand-authored anchor pool. |
+| `lib/generate.ts` | Claude call: prompt, structured output, validation, retry, fallback. Server-only. |
+| `lib/puzzle-service.ts` | Daily caching + mode dispatch. Server-only. |
+| `app/api/puzzle/route.ts` | Client-triggered reloads (New puzzle / Try again). |
+| `app/play/Game.tsx` | Game UI. |
+
+Models: **Opus 4.7** for the daily (quality, once a day), **Sonnet 4.6** for
+endless (fast, cheap). The static rules + few-shot anchors are prompt-cached.
+Every generated puzzle is structurally validated server-side; on two failures
+it falls back to a vetted hand-authored puzzle, so the route never 500s.
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local   # add your ANTHROPIC_API_KEY
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Without a key the app still runs — it serves vetted fallback puzzles
+(`source: "fallback"` in the API response) instead of AI-generated ones.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy (Vercel)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Push to a Git remote and import the repo in Vercel.
+2. Add `ANTHROPIC_API_KEY` under Project Settings → Environment Variables.
+3. Deploy. Share the URL with your team — the Daily tab is the shared puzzle.
 
-## Learn More
+> The daily route is pinned to one region (`preferredRegion = "iad1"`) so a
+> cold cache in a second region is very unlikely to regenerate the day's
+> puzzle. Without a database this can't be guaranteed to exactly zero.
 
-To learn more about Next.js, take a look at the following resources:
+## Test
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx vitest run        # pure game-engine tests
+npm run build         # typecheck + production build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Design
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `docs/superpowers/specs/2026-05-18-british-connections-design.md`. The
+original static-HTML prototype is preserved at `docs/prototype/index.html`.

@@ -1,40 +1,31 @@
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html {
-  height: 100%;
-}
-
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --yellow: #f9df6d;
+  --green: #a0c35a;
+  --blue: #b0c4ef;
+  --purple: #ba81c5;
+  --tile: #efefe6;
+  --tile-sel: #5a594e;
+  --ink: #121212;
 }
 
 * {
   box-sizing: border-box;
-  padding: 0;
   margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  max-width: 100vw;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  background: #fff;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -42,8 +33,319 @@ a {
   text-decoration: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+.page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px 40px;
+}
+
+header.bc {
+  text-align: center;
+  margin-bottom: 18px;
+}
+header.bc h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 30px;
+  letter-spacing: -0.5px;
+}
+header.bc p {
+  color: #666;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.stage {
+  width: 100%;
+  max-width: 540px;
+}
+.instructions {
+  text-align: center;
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+/* Home screen */
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  margin-top: 8px;
+}
+.home p.lede {
+  text-align: center;
+  color: #444;
+  font-size: 15px;
+  max-width: 380px;
+  margin-bottom: 6px;
+}
+.mode-btn {
+  display: block;
+  width: 320px;
+  max-width: 86vw;
+  border: 1px solid var(--ink);
+  border-radius: 12px;
+  padding: 18px 20px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+.mode-btn:hover {
+  background: #faf9f3;
+}
+.mode-btn.primary {
+  background: var(--ink);
+  color: #fff;
+}
+.mode-btn .title {
+  font-weight: 800;
+  font-size: 17px;
+}
+.mode-btn .sub {
+  font-size: 13px;
+  opacity: 0.75;
+  margin-top: 3px;
+}
+
+/* Solved groups */
+.solved-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.solved {
+  border-radius: 6px;
+  padding: 12px 8px;
+  text-align: center;
+  color: var(--ink);
+  animation: drop 0.4s ease;
+}
+.solved.l0 {
+  background: var(--yellow);
+}
+.solved.l1 {
+  background: var(--green);
+}
+.solved.l2 {
+  background: var(--blue);
+}
+.solved.l3 {
+  background: var(--purple);
+}
+.solved .cat {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 15px;
+}
+.solved .mem {
+  font-size: 15px;
+  margin-top: 2px;
+}
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
   }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.tile {
+  aspect-ratio: 1 / 1;
+  border: none;
+  border-radius: 6px;
+  background: var(--tile);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: clamp(11px, 3.4vw, 18px);
+  text-transform: uppercase;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4px;
+  user-select: none;
+  transition: transform 0.08s ease;
+  word-break: break-word;
+  line-height: 1.05;
+}
+.tile:active {
+  transform: scale(0.95);
+}
+.tile.selected {
+  background: var(--tile-sel);
+  color: #fff;
+}
+.tile.shake {
+  animation: shake 0.4s ease;
+}
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+button.ctrl {
+  border: 1px solid var(--ink);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 22px;
+  padding: 11px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button.ctrl:disabled {
+  border-color: #ccc;
+  color: #ccc;
+  cursor: not-allowed;
+}
+button.ctrl.primary {
+  background: var(--ink);
+  color: #fff;
+}
+button.ctrl.primary:disabled {
+  background: #fff;
+}
+
+.mistakes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 20px;
+  font-size: 15px;
+  color: #444;
+}
+.dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--tile-sel);
+}
+.dot.used {
+  background: #e0e0d8;
+}
+
+.toast {
+  position: fixed;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+.toast.show {
+  opacity: 1;
+}
+
+.endscreen {
+  text-align: center;
+  margin-top: 22px;
+}
+.endscreen h2 {
+  font-family: Georgia, serif;
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+.endscreen p {
+  color: #666;
+  margin-bottom: 14px;
+}
+.resultgrid {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 18px;
+}
+.resultrow {
+  display: flex;
+  gap: 4px;
+}
+.sq {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+}
+.sq.l0 {
+  background: var(--yellow);
+}
+.sq.l1 {
+  background: var(--green);
+}
+.sq.l2 {
+  background: var(--blue);
+}
+.sq.l3 {
+  background: var(--purple);
+}
+
+.status {
+  text-align: center;
+  margin-top: 40px;
+  color: #444;
+}
+.status .spinner {
+  width: 34px;
+  height: 34px;
+  border: 4px solid #e0e0d8;
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  margin: 0 auto 14px;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.endscreen .btn-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.hint {
+  font-size: 12px;
+  color: #999;
+  margin-top: 14px;
+  text-align: center;
 }
