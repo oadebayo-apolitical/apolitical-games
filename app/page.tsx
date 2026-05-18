@@ -1,34 +1,46 @@
 import Link from "next/link";
+import PageShell from "@/components/PageShell";
 
-export default function Home() {
+const GAMES = [
+  {
+    href: "/connections",
+    title: "Connections",
+    blurb:
+      "Find four groups of four. The NYT-style word puzzle, with the Americanisms swapped out for British references.",
+    accent: "var(--green)",
+  },
+  {
+    href: "/whos-who",
+    title: "Who's Who",
+    blurb:
+      "A photo of a notable British figure — politician, royal, artist, athlete. Five guesses, hints as you go.",
+    accent: "var(--blue)",
+  },
+];
+
+export default function Hub() {
   return (
-    <main className="page">
+    <PageShell>
       <header className="bc">
-        <h1>British Connections</h1>
-        <p>Group the words into four. With a British accent.</p>
+        <h1>Apolitical Games</h1>
+        <p>A little break between meetings.</p>
       </header>
 
-      <div className="home">
-        <p className="lede">
-          Find four groups of four. Same game as NYT Connections — just with the
-          Americanisms swapped out for British references.
-        </p>
-
-        <Link className="mode-btn primary" href="/play?mode=daily">
-          <div className="title">Daily Puzzle</div>
-          <div className="sub">
-            Today&apos;s puzzle — the same one for everyone. Share your result
-            with the team.
-          </div>
-        </Link>
-
-        <Link className="mode-btn" href="/play?mode=endless">
-          <div className="title">Endless</div>
-          <div className="sub">
-            A freshly generated puzzle every time. Play as many as you like.
-          </div>
-        </Link>
-      </div>
-    </main>
+      <ul className="card-grid">
+        {GAMES.map((g) => (
+          <li key={g.href}>
+            <Link
+              className="game-card"
+              href={g.href}
+              style={{ ["--accent" as string]: g.accent }}
+            >
+              <span className="game-card-title">{g.title}</span>
+              <span className="game-card-blurb">{g.blurb}</span>
+              <span className="game-card-cta">Play →</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </PageShell>
   );
 }

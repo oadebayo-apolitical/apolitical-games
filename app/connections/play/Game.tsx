@@ -76,7 +76,7 @@ export default function Game({
 
   if (phase === "loading") {
     return (
-      <main className="page">
+      <>
         <Head dateLabel={null} mode={mode} />
         <div className="status">
           <div className="spinner" />
@@ -86,13 +86,13 @@ export default function Game({
               : "Generating a fresh puzzle…"}
           </p>
         </div>
-      </main>
+      </>
     );
   }
 
   if (phase === "error") {
     return (
-      <main className="page">
+      <>
         <Head dateLabel={null} mode={mode} />
         <div className="status">
           <p>Couldn&apos;t load a puzzle.</p>
@@ -100,12 +100,12 @@ export default function Game({
             <button className="ctrl primary" onClick={reload}>
               Try again
             </button>
-            <Link className="ctrl" href="/">
+            <Link className="ctrl" href="/connections">
               Home
             </Link>
           </div>
         </div>
-      </main>
+      </>
     );
   }
 
@@ -119,7 +119,7 @@ export default function Game({
     );
 
   return (
-    <main className="page">
+    <>
       <Head dateLabel={dateLabel} mode={mode} />
 
       <div className="stage">
@@ -223,7 +223,7 @@ export default function Game({
       </div>
 
       <div className={`toast${toast ? " show" : ""}`}>{toast}</div>
-    </main>
+    </>
   );
 }
 
@@ -292,7 +292,7 @@ function EndScreen({
             New puzzle
           </button>
         )}
-        <Link className="ctrl" href="/">
+        <Link className="ctrl" href="/connections">
           Home
         </Link>
       </div>
