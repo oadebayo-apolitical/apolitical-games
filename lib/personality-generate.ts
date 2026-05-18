@@ -9,28 +9,27 @@ import {
   FALLBACK_FIGURES,
   type Personality,
 } from "./personality";
+import { wlog } from "./log";
 
 const client = new Anthropic();
 const MODEL = "claude-sonnet-4-6";
 
-const SYSTEM = `You run "Who's Who", a guess-the-British-public-figure game. Pick ONE notable British person — politician, monarch/royal, actor, musician, author, scientist, athlete, broadcaster, historical or contemporary. Vary widely across fields and eras; favour people the general British public would plausibly recognise.
+// NOTE: deliberately no example *people* here. Naming famous figures in the
+// system prompt primes the model and causes mode-collapse (observed: one name
+// returned 44% of the time). The schema is described structurally instead;
+// concrete steering (field to use, names to avoid) goes in the user message.
+const SYSTEM = `You run "Who's Who", a guess-the-British-public-figure game. Each turn you pick ONE real British public figure for the player to identify from a photo.
 
 Return JSON matching the schema:
-- name: the canonical full name (e.g. "David Attenborough").
-- wikipediaTitle: the EXACT English Wikipedia article title for this person (must be a real article that has a photograph). Use the real title, e.g. "Elizabeth II", not "Queen Elizabeth II".
-- category: a short role label (e.g. "Naturalist & broadcaster", "Prime Minister", "Footballer").
-- hints: EXACTLY 5 hints, ordered broad → specific. Hint 1 is vague (field only); each later hint is more revealing; hint 5 is very giveaway-level (e.g. their first name only). CRITICAL: no hint may contain the person's surname or full name.
-- acceptableAnswers: lower-case ways a player might reasonably type the answer (surname alone, full name, well-known variants/nicknames).
+- name: the person's canonical full name.
+- wikipediaTitle: the EXACT English Wikipedia article title for this person (a real article that has a photograph). Use the real title (e.g. "Elizabeth II", not "Queen Elizabeth II").
+- category: a short role label (e.g. "Prime Minister", "Footballer", "Novelist").
+- hints: EXACTLY 5 hints, ordered broad → specific. Hint 1 is vague (field only); each later hint is more revealing; hint 5 is giveaway-level (e.g. their first name). CRITICAL: no hint may contain the person's surname or full name.
+- acceptableAnswers: lower-case ways a player might type the answer (surname alone, full name, well-known variants/nicknames).
 
-Reference examples (style/quality bar — do not reuse these people):
-${FALLBACK_FIGURES.slice(0, 3)
-  .map(
-    (f) =>
-      `name: ${f.name} | wikipediaTitle: ${f.wikipediaTitle} | category: ${f.category}\n  hints: ${f.hints.join(" / ")}\n  acceptableAnswers: ${f.acceptableAnswers.join(", ")}`
-  )
-  .join("\n")}
+DIVERSITY IS CRITICAL. This runs many times. Do NOT default to the handful of "most famous British people" (Churchill, Attenborough, the Queen, Bowie, Beckham, Adele, Vivienne Westwood, Emmeline Pankhurst, etc.). Each turn, pick someone genuinely different — a recognisable figure the British public would know, but reach beyond the obvious dozen. Span eras (Victorian to present) and the full range of fields. A well-known but less-predictable choice is better than a top-10 name.
 
-Output ONLY the JSON. Be factually accurate; if unsure a person's Wikipedia page has a photo, pick someone more famous.`;
+Output ONLY the JSON. Be factually accurate; the Wikipedia article must exist and have a photo.`;
 
 const SCHEMA = {
   type: "object",
@@ -45,21 +44,32 @@ const SCHEMA = {
   additionalProperties: false,
 } as const;
 
-async function callOnce(seed: string): Promise<Personality | null> {
+async function callOnce(
+  category: string,
+  avoid: string[]
+): Promise<Personality | null> {
+  const avoidList =
+    avoid.length > 0 ? avoid.join("; ") : "(nothing yet — pick freely)";
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 1024,
+    // Sonnet 4.6 still honours temperature; max it for sampling spread.
+    temperature: 1,
     system: [
       { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
     ],
     output_config: {
-      effort: "low",
+      effort: "medium",
       format: { type: "json_schema", schema: SCHEMA },
     },
     messages: [
       {
         role: "user",
-        content: `Pick a fresh British figure — vary the field and era. Variation token: ${seed}.`,
+        content: `This round, the person's primary field should be: ${category}.
+
+Pick someone clearly recognisable to the British public in that field, but NOT one of the most over-used names — surprise me with a fresh, distinct choice across eras.
+
+Do NOT pick any of these recently-used people: ${avoidList}.`,
       },
     ],
   });
@@ -73,10 +83,20 @@ async function callOnce(seed: string): Promise<Personality | null> {
   try {
     parsed = JSON.parse(text);
   } catch {
+    wlog("gen.parse_error", { sample: text.slice(0, 80) });
     return null;
   }
-  if (!validatePersonality(parsed).ok) return null;
-  return normalisePersonality(parsed as Personality);
+  const check = validatePersonality(parsed);
+  if (!check.ok) {
+    wlog("gen.invalid", {
+      reason: check.error ?? "unknown",
+      name: (parsed as { name?: string })?.name ?? "?",
+    });
+    return null;
+  }
+  const p = normalisePersonality(parsed as Personality);
+  wlog("gen.ok", { name: p.name, title: p.wikipediaTitle });
+  return p;
 }
 
 export function fallbackFigure(): Personality {
@@ -85,20 +105,18 @@ export function fallbackFigure(): Personality {
 
 /** Try the model twice; null if it never returns a valid personality. */
 export async function generatePersonality(
-  seed: string
+  category: string,
+  avoid: string[]
 ): Promise<Personality | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const p = await callOnce(seed);
+      const p = await callOnce(category, avoid);
       if (p) return p;
     } catch (err) {
       if (err instanceof Anthropic.APIError) {
-        console.error(
-          `Claude API error (${err.status}) on personality attempt ${attempt}:`,
-          err.message
-        );
+        wlog("gen.api_error", { status: err.status, msg: err.message, attempt });
       } else {
-        console.error(`Personality attempt ${attempt} failed:`, err);
+        wlog("gen.error", { msg: String(err), attempt });
       }
     }
   }

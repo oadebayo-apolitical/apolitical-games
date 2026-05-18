@@ -3,6 +3,7 @@
 // User-Agent. Returns null on any failure so callers can fall back.
 
 import "server-only";
+import { wlog } from "./log";
 
 export interface WikiInfo {
   imageUrl: string;
@@ -25,7 +26,10 @@ export async function fetchWikiInfo(title: string): Promise<WikiInfo | null> {
       signal: controller.signal,
       cache: "no-store",
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      wlog("wiki.http_error", { title, status: res.status });
+      return null;
+    }
     const data = (await res.json()) as {
       type?: string;
       title?: string;
@@ -35,10 +39,17 @@ export async function fetchWikiInfo(title: string): Promise<WikiInfo | null> {
       content_urls?: { desktop?: { page?: string } };
     };
     // Skip disambiguation / missing pages.
-    if (data.type && data.type !== "standard") return null;
+    if (data.type && data.type !== "standard") {
+      wlog("wiki.not_standard", { title, type: data.type ?? "?" });
+      return null;
+    }
     const imageUrl =
       data.thumbnail?.source ?? data.originalimage?.source ?? null;
-    if (!imageUrl) return null;
+    if (!imageUrl) {
+      wlog("wiki.no_image", { title });
+      return null;
+    }
+    wlog("wiki.ok", { title });
     return {
       imageUrl,
       pageUrl:
@@ -46,7 +57,8 @@ export async function fetchWikiInfo(title: string): Promise<WikiInfo | null> {
         `https://en.wikipedia.org/wiki/${slug}`,
       extract: data.extract ?? "",
     };
-  } catch {
+  } catch (err) {
+    wlog("wiki.network_error", { title, msg: String(err) });
     return null; // network error / timeout / abort
   } finally {
     clearTimeout(timer);
