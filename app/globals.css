@@ -513,6 +513,18 @@ button.ctrl.primary:disabled {
 .ww-pip.used {
   background: #e0e0d8;
 }
+.ww-skip {
+  margin-top: 14px;
+  padding: 8px 18px;
+  font-size: 14px;
+  color: #666;
+  border-color: #ccc;
+}
+.ww-skip:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
 .ww-hints {
   list-style: none;
   width: 100%;

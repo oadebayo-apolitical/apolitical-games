@@ -151,6 +151,15 @@ export default function WhosWho({ initial }: { initial: Round }) {
                 />
               ))}
             </div>
+
+            <button
+              className="ctrl ww-skip"
+              type="button"
+              onClick={next}
+              aria-label="Skip this person and load another"
+            >
+              Skip →
+            </button>
           </>
         )}
 
