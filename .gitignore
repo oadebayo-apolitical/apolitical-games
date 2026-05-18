@@ -42,3 +42,6 @@ next-env.d.ts
 
 # keep the example env (no secrets) tracked
 !.env.example
+
+# transient brand reference screenshots
+.brand-*.png

@@ -1,7 +1,8 @@
 import Link from "next/link";
 
-// Shared layout for every page: a consistent top bar with the product
-// wordmark (always links back to the hub) and a centred, max-width column.
+// Shared layout: white brand top bar with the product wordmark (always
+// links back to the hub), a centred max-width column, and a dark footer —
+// mirroring the Apolitical design system.
 export default function PageShell({
   children,
 }: {
@@ -15,6 +16,9 @@ export default function PageShell({
         </Link>
       </header>
       <div className="shell">{children}</div>
+      <footer className="site-footer">
+        <strong>Apolitical Games</strong> · a little break between meetings
+      </footer>
     </div>
   );
 }
