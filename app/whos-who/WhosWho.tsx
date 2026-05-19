@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { isCorrectGuess, type Round } from "@/lib/personality";
+import { isCorrectGuess, isSamePerson, type Round } from "@/lib/personality";
 
 const MAX_ATTEMPTS = 5;
 // How many rounds to keep preloaded so Skip/Next feels instant.
@@ -41,9 +41,12 @@ export default function WhosWho({ initial }: { initial: Round }) {
   const revealed = Math.min(1 + attempts, round.hints.length);
 
   // Preloaded rounds (+ in-flight count) live in refs so topping up the
-  // buffer never triggers a re-render.
+  // buffer never triggers a re-render. lastNameRef is the person on screen —
+  // used to guarantee "Next" actually changes the face (server dedup is
+  // best-effort and race-prone, so the UI must not trust it).
   const bufferRef = useRef<Round[]>([]);
   const inFlightRef = useRef(0);
+  const lastNameRef = useRef(initial.name);
 
   const refill = useCallback(() => {
     const need =
@@ -52,7 +55,8 @@ export default function WhosWho({ initial }: { initial: Round }) {
       inFlightRef.current += 1;
       fetchRound()
         .then((r) => {
-          if (r) {
+          // Don't buffer the person already on screen.
+          if (r && !isSamePerson(r.name, lastNameRef.current)) {
             bufferRef.current.push(r);
             warmImage(r.image?.url);
           }
@@ -64,6 +68,7 @@ export default function WhosWho({ initial }: { initial: Round }) {
   }, []);
 
   const applyRound = useCallback((r: Round) => {
+    lastNameRef.current = r.name;
     setRound(r);
     setGuess("");
     setAttempts(0);
@@ -71,18 +76,27 @@ export default function WhosWho({ initial }: { initial: Round }) {
     setPhase("playing");
   }, []);
 
-  // Move to the next person — instant if the buffer has one; otherwise
-  // fall back to a foreground fetch with the loading state.
+  // Move to the next person. Skips any candidate identical to the current
+  // one (buffer first; then foreground fetch). Capped so it can never hang —
+  // a rare repeat beats a frozen screen.
   const next = useCallback(async () => {
-    const buffered = bufferRef.current.shift();
-    if (buffered) {
-      applyRound(buffered);
-      refill();
-      return;
+    while (bufferRef.current.length > 0) {
+      const cand = bufferRef.current.shift() as Round;
+      if (!isSamePerson(cand.name, lastNameRef.current)) {
+        applyRound(cand);
+        refill();
+        return;
+      }
+      // identical to current — discard and keep looking
     }
     setPhase("loading");
-    const r = await fetchRound();
-    if (r) applyRound(r);
+    let chosen: Round | null = null;
+    for (let i = 0; i < 4 && !chosen; i++) {
+      const r = await fetchRound();
+      if (!r) continue;
+      if (!isSamePerson(r.name, lastNameRef.current) || i === 3) chosen = r;
+    }
+    if (chosen) applyRound(chosen);
     else setPhase("error");
     refill();
   }, [applyRound, refill]);

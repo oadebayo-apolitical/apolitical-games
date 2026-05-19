@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   normalise,
+  isSamePerson,
   isCorrectGuess,
   validatePersonality,
   normalisePersonality,
@@ -40,6 +41,23 @@ describe("isCorrectGuess", () => {
   });
   it("does not accept a too-short / first-name-only guess", () => {
     expect(isCorrectGuess("David", P)).toBe(false);
+  });
+});
+
+describe("isSamePerson", () => {
+  it("matches identical names regardless of case/accents/punctuation", () => {
+    expect(isSamePerson("David Bowie", "david  bowie")).toBe(true);
+    expect(isSamePerson("Mo Farah", "Mo Farah")).toBe(true);
+  });
+  it("treats a title-extended variant as the same person", () => {
+    expect(
+      isSamePerson("Princess Margaret", "Princess Margaret, Countess of Snowdon")
+    ).toBe(true);
+  });
+  it("keeps genuinely different people distinct", () => {
+    expect(isSamePerson("David Bowie", "David Attenborough")).toBe(false);
+    expect(isSamePerson("Mo Farah", "Mo")).toBe(true); // prefix-word = same
+    expect(isSamePerson("", "Anyone")).toBe(false);
   });
 });
 

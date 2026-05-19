@@ -70,6 +70,20 @@ export function acceptedAnswers(p: Nameable): Set<string> {
   return out;
 }
 
+/**
+ * Same human? Used client-side to guarantee "Next person" always changes
+ * the face — server dedup is best-effort (per-instance, race-prone), so the
+ * UI must not trust it. Exact normalised-name match plus a containment check
+ * so "Princess Margaret" and "Princess Margaret, Countess of Snowdon" count
+ * as the same person.
+ */
+export function isSamePerson(a: string, b: string): boolean {
+  const x = normalise(a);
+  const y = normalise(b);
+  if (!x || !y) return false;
+  return x === y || x.startsWith(y + " ") || y.startsWith(x + " ");
+}
+
 /** Lenient correctness check used by the UI. */
 export function isCorrectGuess(guess: string, p: Nameable): boolean {
   const g = normalise(guess);
