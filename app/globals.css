@@ -560,7 +560,9 @@ button.ctrl.primary:disabled {
   position: relative;
   width: 100%;
   max-width: 340px;
-  aspect-ratio: 1 / 1;
+  /* Portrait-ish box; the photo is shown WHOLE (never cropped) so the
+     face is always visible — Wikidata portraits vary wildly in framing. */
+  aspect-ratio: 4 / 5;
   border-radius: 16px;
   overflow: hidden;
   background: var(--sand-200);
@@ -573,7 +575,7 @@ button.ctrl.primary:disabled {
 .ww-frame img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 .ww-frame .placeholder {
   color: var(--muted);
