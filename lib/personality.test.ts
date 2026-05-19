@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   normalise,
   isSamePerson,
+  sameIdentity,
   isCorrectGuess,
   validatePersonality,
   normalisePersonality,
@@ -58,6 +59,31 @@ describe("isSamePerson", () => {
     expect(isSamePerson("David Bowie", "David Attenborough")).toBe(false);
     expect(isSamePerson("Mo Farah", "Mo")).toBe(true); // prefix-word = same
     expect(isSamePerson("", "Anyone")).toBe(false);
+  });
+});
+
+describe("sameIdentity", () => {
+  const mk = (name: string, wikipediaTitle: string) => ({ name, wikipediaTitle });
+  it("matches on title even when display names differ", () => {
+    expect(
+      sameIdentity(
+        mk("Princess Margaret", "Princess Margaret"),
+        mk("Princess Margaret, Countess of Snowdon", "Princess Margaret")
+      )
+    ).toBe(true);
+  });
+  it("matches a disambiguated title against the plain one", () => {
+    expect(
+      sameIdentity(
+        mk("Robert Lindsay", "Robert Lindsay (actor)"),
+        mk("Robert Lindsay", "Robert Lindsay")
+      )
+    ).toBe(true);
+  });
+  it("keeps different people distinct", () => {
+    expect(
+      sameIdentity(mk("David Bowie", "David Bowie"), mk("Adele", "Adele"))
+    ).toBe(false);
   });
 });
 

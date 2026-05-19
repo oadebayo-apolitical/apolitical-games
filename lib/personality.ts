@@ -84,6 +84,24 @@ export function isSamePerson(a: string, b: string): boolean {
   return x === y || x.startsWith(y + " ") || y.startsWith(x + " ");
 }
 
+/**
+ * Same human across two {name, wikipediaTitle} records. The Wikipedia
+ * article title is the strongest identity signal (canonical per person),
+ * so a match on EITHER the fuzzy name or the fuzzy title counts. This
+ * catches same-person-different-string repeats the raw-string server check
+ * missed, e.g. name "Princess Margaret" vs "Princess Margaret, Countess of
+ * Snowdon", or title "Robert Lindsay (actor)" vs "Robert Lindsay".
+ */
+export function sameIdentity(
+  a: { name: string; wikipediaTitle: string },
+  b: { name: string; wikipediaTitle: string }
+): boolean {
+  return (
+    isSamePerson(a.name, b.name) ||
+    isSamePerson(a.wikipediaTitle, b.wikipediaTitle)
+  );
+}
+
 /** Lenient correctness check used by the UI. */
 export function isCorrectGuess(guess: string, p: Nameable): boolean {
   const g = normalise(guess);

@@ -6,6 +6,7 @@ import { generatePersonality, fallbackFigure } from "./personality-generate";
 import { fetchWikiInfo } from "./wikipedia";
 import {
   FALLBACK_FIGURES,
+  sameIdentity,
   type Personality,
   type Round,
 } from "./personality";
@@ -13,13 +14,24 @@ import { wlog } from "./log";
 
 export type { Round };
 
-// Server-instance memory (no DB): the last N served names, so we can both
-// tell the model what to avoid and reject a repeat if it ignores us.
+// Server-instance memory (no DB): the last N served *identities*
+// (name + Wikipedia title), so we can tell the model what to avoid AND
+// reject a repeat by identity even when it comes back as a different
+// string (e.g. a title-extended name variant).
 const RECENT_MAX = 40;
-const recent: string[] = [];
-function remember(name: string) {
-  if (!recent.includes(name)) recent.push(name);
+type Id = { name: string; wikipediaTitle: string };
+const recent: Id[] = [];
+
+function isRecent(p: Id): boolean {
+  return recent.some((r) => sameIdentity(r, p));
+}
+function remember(p: Id) {
+  if (!isRecent(p)) recent.push({ name: p.name, wikipediaTitle: p.wikipediaTitle });
   while (recent.length > RECENT_MAX) recent.shift();
+}
+// Human-readable avoid-list for the prompt.
+function recentNames(): string[] {
+  return recent.map((r) => r.name);
 }
 
 // Rotate the requested field every call so the model can't sit on one
@@ -64,34 +76,35 @@ function toRound(
 export async function getRound(): Promise<Round> {
   let aiTries = 0;
 
-  // Up to 3 AI candidates; accept the first that is fresh AND has a photo.
+  // Up to 3 AI candidates; accept the first that is a fresh identity AND
+  // has a photo.
   for (let i = 0; i < 3; i++) {
     const field = nextField();
-    const p = await generatePersonality(field, recent);
+    const p = await generatePersonality(field, recentNames());
     if (!p) break; // generation unavailable (e.g. no API key) — go to fallback
     aiTries++;
-    if (recent.includes(p.name)) {
-      wlog("ai.dup_rejected", { name: p.name, field });
-      continue; // model ignored the avoid-list — try again
+    if (isRecent(p)) {
+      wlog("ai.dup_rejected", { name: p.name, title: p.wikipediaTitle, field });
+      continue; // same identity as a recent one — try again
     }
     const wiki = await fetchWikiInfo(p.wikipediaTitle);
     if (wiki) {
-      remember(p.name);
+      remember(p);
       wlog("result", { source: "ai", name: p.name, field, aiTries });
       return toRound(p, wiki, "ai");
     }
     wlog("ai.wiki_miss", { name: p.name, title: p.wikipediaTitle });
   }
 
-  // Fallback: try a few baked figures (their pages reliably have photos).
+  // Fallback: try baked figures, skipping any recently-served identity.
   const tried = new Set<string>();
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < FALLBACK_FIGURES.length; i++) {
     const p = fallbackFigure();
-    if (tried.has(p.name)) continue;
+    if (tried.has(p.name) || isRecent(p)) continue;
     tried.add(p.name);
     const wiki = await fetchWikiInfo(p.wikipediaTitle);
     if (wiki) {
-      remember(p.name);
+      remember(p);
       wlog("result", { source: "fallback", name: p.name, aiTries });
       return toRound(p, wiki, "fallback");
     }
