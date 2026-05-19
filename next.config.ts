@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     // Wikipedia/Wikimedia serve personality photos from these hosts.
     remotePatterns: [
       { protocol: "https", hostname: "upload.wikimedia.org" },
+      { protocol: "https", hostname: "commons.wikimedia.org" },
       { protocol: "https", hostname: "*.wikipedia.org" },
     ],
   },

@@ -1,5 +1,7 @@
-// Server-only: ask Claude to pick a notable British public figure and write
-// graded hints. Structurally validated; falls back to the baked roster.
+// Server-only: the model NO LONGER chooses who to show. The person is
+// picked from the Wikidata-sourced deck (guaranteed real + has a photo);
+// the model only writes graded hints for that already-verified person,
+// grounded by the Wikipedia extract so the clues stay factual.
 
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
@@ -14,46 +16,37 @@ import { wlog } from "./log";
 const client = new Anthropic();
 const MODEL = "claude-sonnet-4-6";
 
-// NOTE: deliberately no example *people* here. Naming famous figures in the
-// system prompt primes the model and causes mode-collapse (observed: one name
-// returned 44% of the time). The schema is described structurally instead;
-// concrete steering (field to use, names to avoid) goes in the user message.
-const SYSTEM = `You run "Who's Who", a guess-the-British-public-figure game. Each turn you pick ONE real British public figure for the player to identify from a photo.
+const SYSTEM = `You write clues for "Who's Who", a guess-the-person game. You are GIVEN one real British public figure (already verified — they exist and have a photo). Your only job is to write the clue set for THAT person. You do not choose the person.
 
 Return JSON matching the schema:
-- name: the person's canonical full name.
-- wikipediaTitle: the EXACT English Wikipedia article title for this person (a real article that has a photograph). Use the real title (e.g. "Elizabeth II", not "Queen Elizabeth II").
-- category: a short role label (e.g. "Prime Minister", "Footballer", "Novelist").
-- hints: EXACTLY 5 hints, ordered broad → specific. Hint 1 is vague (field only); each later hint is more revealing; hint 5 is giveaway-level (e.g. their first name). CRITICAL: no hint may contain the person's surname or full name.
-- acceptableAnswers: lower-case ways a player might type the answer (surname alone, full name, well-known variants/nicknames).
+- category: a short role label for them (e.g. "Prime Minister", "Footballer", "Novelist", "Computer scientist").
+- hints: EXACTLY 5 hints, ordered broad → specific. Hint 1 is vague (field/era only); each later hint is more revealing; hint 5 is giveaway-level (e.g. their first name, or an unmistakable signature achievement). CRITICAL: NO hint may contain the person's surname or full name.
+- acceptableAnswers: lower-case strings a player might reasonably type to be marked correct — the surname alone, the full name, and well-known variants/nicknames/regnal names.
 
-DIVERSITY IS CRITICAL. This runs many times. Do NOT default to the handful of "most famous British people" (Churchill, Attenborough, the Queen, Bowie, Beckham, Adele, Vivienne Westwood, Emmeline Pankhurst, etc.). Each turn, pick someone genuinely different — a recognisable figure the British public would know, but reach beyond the obvious dozen. Span eras (Victorian to present) and the full range of fields. A well-known but less-predictable choice is better than a top-10 name.
-
-Output ONLY the JSON. Be factually accurate; the Wikipedia article must exist and have a photo.`;
+Be factually accurate and base the hints on the provided context. If the context is thin, use only what you reliably know about this specific person; never invent facts or hedge with "possibly". Output ONLY the JSON.`;
 
 const SCHEMA = {
   type: "object",
   properties: {
-    name: { type: "string" },
-    wikipediaTitle: { type: "string" },
     category: { type: "string" },
     hints: { type: "array", items: { type: "string" } },
     acceptableAnswers: { type: "array", items: { type: "string" } },
   },
-  required: ["name", "wikipediaTitle", "category", "hints", "acceptableAnswers"],
+  required: ["category", "hints", "acceptableAnswers"],
   additionalProperties: false,
 } as const;
 
 async function callOnce(
-  category: string,
-  avoid: string[]
+  name: string,
+  title: string,
+  context: string
 ): Promise<Personality | null> {
-  const avoidList =
-    avoid.length > 0 ? avoid.join("; ") : "(nothing yet — pick freely)";
+  const ctx = context.trim()
+    ? context.trim().slice(0, 1200)
+    : "(no extra context — rely on your own knowledge of this specific person)";
   const res = await client.messages.create({
     model: MODEL,
     max_tokens: 1024,
-    // Sonnet 4.6 still honours temperature; max it for sampling spread.
     temperature: 1,
     system: [
       { type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } },
@@ -65,11 +58,12 @@ async function callOnce(
     messages: [
       {
         role: "user",
-        content: `This round, the person's primary field should be: ${category}.
+        content: `Write the Who's Who clue set for: ${name}
 
-Pick someone clearly recognisable to the British public in that field, but NOT one of the most over-used names — surprise me with a fresh, distinct choice across eras.
+Context (from Wikipedia):
+${ctx}
 
-Do NOT pick any of these recently-used people: ${avoidList}.`,
+Remember: 5 graded hints, none containing the surname or full name.`,
       },
     ],
   });
@@ -83,19 +77,23 @@ Do NOT pick any of these recently-used people: ${avoidList}.`,
   try {
     parsed = JSON.parse(text);
   } catch {
-    wlog("gen.parse_error", { sample: text.slice(0, 80) });
+    wlog("gen.parse_error", { name, sample: text.slice(0, 80) });
     return null;
   }
-  const check = validatePersonality(parsed);
+  // Inject the verified identity, then validate as a full profile (this also
+  // enforces "no hint leaks the surname" against the real name).
+  const candidate = {
+    ...(parsed as object),
+    name,
+    wikipediaTitle: title,
+  };
+  const check = validatePersonality(candidate);
   if (!check.ok) {
-    wlog("gen.invalid", {
-      reason: check.error ?? "unknown",
-      name: (parsed as { name?: string })?.name ?? "?",
-    });
+    wlog("gen.invalid", { name, reason: check.error ?? "unknown" });
     return null;
   }
-  const p = normalisePersonality(parsed as Personality);
-  wlog("gen.ok", { name: p.name, title: p.wikipediaTitle });
+  const p = normalisePersonality(candidate as Personality);
+  wlog("gen.ok", { name: p.name });
   return p;
 }
 
@@ -103,20 +101,21 @@ export function fallbackFigure(): Personality {
   return FALLBACK_FIGURES[Math.floor(Math.random() * FALLBACK_FIGURES.length)];
 }
 
-/** Try the model twice; null if it never returns a valid personality. */
-export async function generatePersonality(
-  category: string,
-  avoid: string[]
+/** Write a clue profile for a given verified person. Two attempts. */
+export async function writeProfile(
+  name: string,
+  title: string,
+  context: string
 ): Promise<Personality | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const p = await callOnce(category, avoid);
+      const p = await callOnce(name, title, context);
       if (p) return p;
     } catch (err) {
       if (err instanceof Anthropic.APIError) {
-        wlog("gen.api_error", { status: err.status, msg: err.message, attempt });
+        wlog("gen.api_error", { name, status: err.status, msg: err.message });
       } else {
-        wlog("gen.error", { msg: String(err), attempt });
+        wlog("gen.error", { name, msg: String(err) });
       }
     }
   }

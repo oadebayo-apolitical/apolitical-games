@@ -53,10 +53,22 @@ Without a key the app still runs — it serves vetted fallback puzzles
 > cold cache in a second region is very unlikely to regenerate the day's
 > puzzle. Without a database this can't be guaranteed to exactly zero.
 
+## Who's Who deck
+
+The Who's Who game shows real British figures sourced from Wikidata —
+each guaranteed to be a human with a portrait image (P18) and an English
+Wikipedia article. The list is committed at `lib/whos-who-deck.json`; the
+runtime picks from it (so the photo always exists) and Claude only writes
+the clues for that already-verified person. Refresh the deck periodically:
+
+```bash
+npm run deck:build    # re-query Wikidata → lib/whos-who-deck.json
+```
+
 ## Test
 
 ```bash
-npx vitest run        # pure game-engine tests
+npx vitest run        # pure logic + deck tests
 npm run build         # typecheck + production build
 ```
 
