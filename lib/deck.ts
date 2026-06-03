@@ -22,19 +22,18 @@ export function deckImageUrl(e: DeckEntry): string {
 }
 
 /**
- * Pick a person not matching `isRecent`. Tries random draws first (fast,
- * uniform), then scans for any fresh entry, then gives up and returns a
+ * Pick a person the `isExcluded` predicate rejects. Tries random draws first
+ * (fast, uniform), then scans for any fresh entry, then gives up and returns a
  * random one so the game never dead-ends.
  */
 export function pickFromDeck(
-  isRecent: (e: { name: string; wikipediaTitle: string }) => boolean
+  isExcluded: (e: DeckEntry) => boolean
 ): DeckEntry {
-  const asId = (e: DeckEntry) => ({ name: e.name, wikipediaTitle: e.title });
   for (let i = 0; i < 25; i++) {
     const e = DECK[Math.floor(Math.random() * DECK.length)];
-    if (!isRecent(asId(e))) return e;
+    if (!isExcluded(e)) return e;
   }
-  const fresh = DECK.filter((e) => !isRecent(asId(e)));
+  const fresh = DECK.filter((e) => !isExcluded(e));
   if (fresh.length > 0) {
     return fresh[Math.floor(Math.random() * fresh.length)];
   }

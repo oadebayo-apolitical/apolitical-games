@@ -6,10 +6,13 @@
 
 import "server-only";
 import { wlog } from "./log";
+import { widenThumb } from "./person-image";
 
 export interface WikiExtract {
   extract: string;
   pageUrl: string;
+  /** Direct upload.wikimedia.org CDN thumbnail (preferred image source), or null. */
+  thumbUrl: string | null;
 }
 
 const UA =
@@ -36,13 +39,17 @@ export async function fetchExtract(
     const data = (await res.json()) as {
       extract?: string;
       content_urls?: { desktop?: { page?: string } };
+      thumbnail?: { source?: string };
+      originalimage?: { source?: string };
     };
-    wlog("wiki.ok", { title });
+    const rawThumb = data.thumbnail?.source ?? data.originalimage?.source ?? null;
+    wlog("wiki.ok", { title, thumb: rawThumb ? "yes" : "no" });
     return {
       extract: data.extract ?? "",
       pageUrl:
         data.content_urls?.desktop?.page ??
         `https://en.wikipedia.org/wiki/${slug}`,
+      thumbUrl: rawThumb ? widenThumb(rawThumb) : null,
     };
   } catch (err) {
     wlog("wiki.network_error", { title, msg: String(err) });

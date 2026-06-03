@@ -1,28 +1,26 @@
 // Server-only: produce a ready-to-play Who's Who round. The person is
-// chosen from the Wikidata-sourced deck (guaranteed real + has a P18
-// photo); the model only writes the clues for that verified person.
-// Endless mode, no caching.
+// chosen from the Wikidata-sourced deck (guaranteed real + has a P18 photo);
+// the model only writes the clues. We verify a photo actually loads before
+// committing, and dedup globally via MongoDB so people don't repeat.
 
 import "server-only";
 import { writeProfile, fallbackFigure } from "./personality-generate";
 import { fetchExtract } from "./wikipedia";
 import { DECK, deckImageUrl, pickFromDeck } from "./deck";
-import { sameIdentity, type Round } from "./personality";
+import { getServedPeople } from "./served-people-mongo";
+import { resolveImage } from "./person-image";
+import type { Round } from "./personality";
 import { wlog } from "./log";
 
 export type { Round };
 
-// Server-instance memory (no DB): the last N served identities, so we don't
-// repeat a person (deck pick is filtered through this).
+// Per-instance guard: the last N qids served by THIS process. Keeps degraded
+// (no-Mongo) mode from repeating, and avoids reshowing the very last people
+// before a Mongo write is reflected in the next request's served set.
 const RECENT_MAX = 60;
-type Id = { name: string; wikipediaTitle: string };
-const recent: Id[] = [];
-
-function isRecent(p: Id): boolean {
-  return recent.some((r) => sameIdentity(r, p));
-}
-function remember(p: Id) {
-  if (!isRecent(p)) recent.push(p);
+const recent: string[] = [];
+function rememberLocal(qid: string) {
+  if (!recent.includes(qid)) recent.push(qid);
   while (recent.length > RECENT_MAX) recent.shift();
 }
 
@@ -32,10 +30,33 @@ const wikiPage = (title: string) =>
   )}`;
 
 export async function getRound(): Promise<Round> {
-  // Up to 3 deck people; accept the first the model can write clues for.
-  for (let i = 0; i < 3; i++) {
-    const person = pickFromDeck(isRecent);
+  const repo = getServedPeople();
+  const served = await repo.servedQids();
+  const exhausted = served.size >= DECK.length;
+
+  // Up to 4 candidates; accept the first with a working photo AND clues.
+  for (let i = 0; i < 4; i++) {
+    let person = pickFromDeck(
+      (e) => served.has(e.qid) || recent.includes(e.qid)
+    );
+    if (exhausted) {
+      // Whole deck served — recycle the least-recently-seen person instead.
+      const qid = await repo.oldestServedQid(recent);
+      person = DECK.find((e) => e.qid === qid) ?? person;
+    }
+
     const extract = await fetchExtract(person.title);
+    // Verify a real photo loads before committing: CDN thumbnail first (fast,
+    // not rate-limited), then the deck's Special:FilePath. Skip if neither.
+    const imageUrl = await resolveImage([
+      extract?.thumbUrl,
+      deckImageUrl(person),
+    ]);
+    if (!imageUrl) {
+      wlog("image_miss", { name: person.name });
+      continue;
+    }
+
     const profile = await writeProfile(
       person.name,
       person.title,
@@ -45,7 +66,13 @@ export async function getRound(): Promise<Round> {
       wlog("profile_miss", { name: person.name });
       continue; // model unavailable/invalid — try another deck person
     }
-    remember({ name: person.name, wikipediaTitle: person.title });
+
+    await repo.remember({
+      qid: person.qid,
+      name: person.name,
+      title: person.title,
+    });
+    rememberLocal(person.qid);
     wlog("result", { source: "deck", name: person.name, attempt: i + 1 });
     return {
       name: person.name,
@@ -54,17 +81,16 @@ export async function getRound(): Promise<Round> {
       acceptableAnswers: profile.acceptableAnswers,
       blurb: extract?.extract ?? "",
       image: {
-        url: deckImageUrl(person),
+        url: imageUrl,
         pageUrl: extract?.pageUrl ?? wikiPage(person.title),
       },
       source: "ai",
     };
   }
 
-  // Model unavailable (e.g. no API key) — baked roster keeps it playable.
+  // Model/photo unavailable for every attempt — baked roster keeps it playable.
   // No deck photo for these; the game still works from the hints.
   const fb = fallbackFigure();
-  remember({ name: fb.name, wikipediaTitle: fb.wikipediaTitle });
   wlog("result", { source: "fallback", name: fb.name, deck: DECK.length });
   return {
     name: fb.name,
