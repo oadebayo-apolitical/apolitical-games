@@ -6,7 +6,8 @@ import "server-only";
 import { MongoClient, type Db } from "mongodb";
 
 const DB_NAME = "apol_games";
-const COLLECTION = "served_groups";
+const SERVED_GROUPS = "served_groups";
+const SERVED_PEOPLE = "served_people";
 
 const g = globalThis as unknown as { _connMongo?: Promise<MongoClient> };
 
@@ -16,11 +17,11 @@ export async function getDb(): Promise<Db | null> {
   try {
     if (!g._connMongo) {
       g._connMongo = new MongoClient(uri).connect().then(async (client) => {
-        // Permanent uniqueness key; idempotent to create.
-        await client
-          .db(DB_NAME)
-          .collection(COLLECTION)
-          .createIndex({ sig: 1 }, { unique: true });
+        const db = client.db(DB_NAME);
+        // Permanent uniqueness keys; idempotent to create.
+        await db.collection(SERVED_GROUPS).createIndex({ sig: 1 }, { unique: true });
+        await db.collection(SERVED_PEOPLE).createIndex({ qid: 1 }, { unique: true });
+        await db.collection(SERVED_PEOPLE).createIndex({ servedAt: 1 });
         return client;
       });
     }
@@ -28,9 +29,10 @@ export async function getDb(): Promise<Db | null> {
     return client.db(DB_NAME);
   } catch (err) {
     g._connMongo = undefined; // allow a later retry
-    console.error("[connections] mongo.connect failed:", err);
+    console.error("[mongo] connect failed:", err);
     return null;
   }
 }
 
-export const SERVED_GROUPS_COLLECTION = COLLECTION;
+export const SERVED_GROUPS_COLLECTION = SERVED_GROUPS;
+export const SERVED_PEOPLE_COLLECTION = SERVED_PEOPLE;

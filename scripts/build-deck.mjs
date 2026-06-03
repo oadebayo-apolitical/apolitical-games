@@ -16,7 +16,11 @@ import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "lib", "whos-who-deck.json");
-const TARGET = 1000; // final deck size cap
+const TARGET = 5000; // final deck size cap
+// Notability floor: sitelink count is a proxy for public recognisability.
+// Lower = more people but more obscure; tuned to grow the deck well past the
+// original 1,000 while keeping a guessable game. Override with SITELINK_FLOOR.
+const FLOOR = Number(process.env.SITELINK_FLOOR ?? 25);
 
 // British state entities for citizenship (P27) — covers modern + historical.
 const CITIZENSHIP = [
@@ -35,7 +39,7 @@ SELECT ?item ?article ?image ?sl WHERE {
   ?item wdt:P31 wd:Q5 ;
         wdt:P18 ?image ;
         wikibase:sitelinks ?sl .
-  FILTER(?sl >= 45)
+  FILTER(?sl >= ${FLOOR})
   VALUES ?cit { ${CITIZENSHIP.join(" ")} }
   ?item wdt:P27 ?cit .
   # Exclude colonials / naturalised non-Brits (e.g. George Washington was a
@@ -45,7 +49,7 @@ SELECT ?item ?article ?image ?sl WHERE {
            schema:isPartOf <https://en.wikipedia.org/> .
 }
 ORDER BY DESC(?sl)
-LIMIT 1500`;
+LIMIT ${TARGET + 1000}`;
 
 const UA =
   "ApoliticalGames/1.0 (https://apolitical.co; internal team game) deck-builder";

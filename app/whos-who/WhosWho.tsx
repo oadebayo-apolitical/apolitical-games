@@ -36,6 +36,9 @@ export default function WhosWho({ initial }: { initial: Round }) {
   const [attempts, setAttempts] = useState(0);
   const [status, setStatus] = useState<Status>("playing");
   const [wrongFlash, setWrongFlash] = useState(false);
+  // Server verifies the photo before serving, but a client-side load can still
+  // fail (rate limit, flaky network) — fall back to the placeholder if so.
+  const [imgError, setImgError] = useState(false);
 
   // Hint 0 is shown from the start; each wrong guess reveals the next.
   const revealed = Math.min(1 + attempts, round.hints.length);
@@ -74,6 +77,7 @@ export default function WhosWho({ initial }: { initial: Round }) {
     setAttempts(0);
     setStatus("playing");
     setPhase("playing");
+    setImgError(false);
   }, []);
 
   // Move to the next person. Skips any candidate identical to the current
@@ -162,7 +166,7 @@ export default function WhosWho({ initial }: { initial: Round }) {
     <Frame title>
       <div className="ww">
         <div className="ww-frame">
-          {round.image ? (
+          {round.image && !imgError ? (
             <Image
               src={round.image.url}
               alt={done ? round.name : "Mystery British personality"}
@@ -170,6 +174,7 @@ export default function WhosWho({ initial }: { initial: Round }) {
               sizes="340px"
               priority
               unoptimized
+              onError={() => setImgError(true)}
             />
           ) : (
             <span className="placeholder">
@@ -177,7 +182,7 @@ export default function WhosWho({ initial }: { initial: Round }) {
             </span>
           )}
         </div>
-        {round.image && (
+        {round.image && !imgError && (
           <a
             className="credit"
             href={round.image.pageUrl}
