@@ -5,6 +5,10 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { generatePuzzle, type Mode } from "./generate";
 import type { Puzzle } from "./puzzle";
+import { serveUnique } from "./dedupe";
+import { getServedGroups } from "./served-groups-mongo";
+import { pickDomains } from "./domains";
+import { clog } from "./log";
 
 export interface PuzzlePayload {
   puzzle: Puzzle;
@@ -31,7 +35,23 @@ export async function getPuzzle(mode: Mode): Promise<PuzzlePayload> {
     const { puzzle, source } = await getDailyPuzzle(date);
     return { puzzle, source, dateLabel: date };
   }
-  const seed = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const { puzzle, source } = await generatePuzzle("endless", seed);
+  const repo = getServedGroups();
+  const avoidNames = await repo.recentNames(40);
+  const maxAttempts = 4;
+  const { puzzle, source, collisions } = await serveUnique({
+    repo,
+    maxAttempts,
+    generate: async () => {
+      const seed = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      return generatePuzzle("endless", seed, {
+        avoidNames,
+        domains: pickDomains(seed, 2),
+      });
+    },
+  });
+  clog(collisions >= maxAttempts ? "novelty.pressure" : "gen.ok", {
+    source,
+    collisions,
+  });
   return { puzzle, source, dateLabel: null };
 }

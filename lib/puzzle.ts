@@ -61,6 +61,18 @@ export function normalisePuzzle(value: Puzzle): Puzzle {
   })) as Puzzle;
 }
 
+/**
+ * Stable signature for a group: its four words, normalised (trimmed, uppercased)
+ * and sorted, joined with "|". Same four words in any order/case ⇒ same signature.
+ * This is the unit of the "never serve a group twice" guarantee.
+ */
+export function groupSignature(group: { members: readonly string[] }): string {
+  return group.members
+    .map((m) => m.trim().toUpperCase())
+    .sort()
+    .join("|");
+}
+
 // Hand-authored anchor pool: few-shot examples for the generator AND the
 // offline fallback if generation fails. British lens, deliberate overlap traps.
 export const ANCHOR_PUZZLES: Puzzle[] = [
