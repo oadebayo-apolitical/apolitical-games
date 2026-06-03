@@ -11,3 +11,11 @@ export function wlog(event: string, fields: Record<string, unknown> = {}) {
   // e.g. [whos-who] gen.ok name="Ian Botham" title="Ian Botham"
   console.log(`[whos-who] ${event} ${parts.join(" ")}`.trimEnd());
 }
+
+// Same one-line-per-event format as wlog, tagged for the Connections pipeline.
+export function clog(event: string, fields: Record<string, unknown> = {}) {
+  const parts = Object.entries(fields).map(
+    ([k, v]) => `${k}=${typeof v === "string" ? `"${v}"` : JSON.stringify(v)}`
+  );
+  console.log(`[connections] ${event} ${parts.join(" ")}`.trimEnd());
+}

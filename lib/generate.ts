@@ -34,7 +34,7 @@ RULES OF A GOOD PUZZLE:
 - Be factually correct. Do not invent. If unsure about a fact (which channel a soap is on, who played a role), pick a safer category you are certain of.
 - Vary categories — do not reuse the same theme every time.
 
-Here are hand-authored reference puzzles that set the quality bar. Match this style and trap density:
+Here are hand-authored reference puzzles that set the quality bar. They are STYLE references only — match their format and trap density, but do NOT reuse their categories, themes, or answer words (for example, do not produce another "London Underground" or "NEW ___" group):
 
 ${ANCHOR_PUZZLES.map(
   (p, i) =>
@@ -70,11 +70,36 @@ const SCHEMA = {
   additionalProperties: false,
 } as const;
 
-function userPrompt(mode: Mode, seed: string): string {
+export interface GenContext {
+  /** Recently-served category names to steer away from. */
+  avoidNames?: string[];
+  /** Domains to lean into this round, for variety. */
+  domains?: string[];
+}
+
+function userPrompt(mode: Mode, seed: string, ctx?: GenContext): string {
   if (mode === "daily") {
     return `Generate the British Connections puzzle for ${seed}. Make it a balanced, polished daily puzzle with strong overlap traps across all four groups.`;
   }
-  return `Generate a fresh British Connections puzzle. Make it distinct from common themes — vary the categories. Variation token: ${seed}.`;
+  const lines = [
+    "Generate a fresh British Connections puzzle. Vary the categories and aim for inventive, surprising groups.",
+  ];
+  if (ctx?.domains?.length) {
+    lines.push(
+      `For variety this round, lean into domains like: ${ctx.domains.join(
+        "; "
+      )}. Use them as inspiration, not a strict requirement.`
+    );
+  }
+  if (ctx?.avoidNames?.length) {
+    lines.push(
+      `Do NOT reuse any of these recently-used category ideas — pick clearly different themes and answer words: ${ctx.avoidNames.join(
+        "; "
+      )}.`
+    );
+  }
+  lines.push(`Variation token: ${seed}.`);
+  return lines.join("\n");
 }
 
 /** Deterministic anchor fallback so a generation failure still returns a puzzle. */
@@ -88,7 +113,7 @@ export function fallbackPuzzle(mode: Mode, seed: string): Puzzle {
   return ANCHOR_PUZZLES[Math.floor(Math.random() * ANCHOR_PUZZLES.length)];
 }
 
-async function callOnce(mode: Mode, seed: string): Promise<Puzzle | null> {
+async function callOnce(mode: Mode, seed: string, ctx?: GenContext): Promise<Puzzle | null> {
   const res = await client.messages.create({
     model: MODEL[mode],
     max_tokens: 4096,
@@ -98,7 +123,7 @@ async function callOnce(mode: Mode, seed: string): Promise<Puzzle | null> {
       effort: mode === "daily" ? "high" : "low",
       format: { type: "json_schema", schema: SCHEMA },
     },
-    messages: [{ role: "user", content: userPrompt(mode, seed) }],
+    messages: [{ role: "user", content: userPrompt(mode, seed, ctx) }],
   });
 
   const text = res.content
@@ -125,11 +150,12 @@ async function callOnce(mode: Mode, seed: string): Promise<Puzzle | null> {
  */
 export async function generatePuzzle(
   mode: Mode,
-  seed: string
+  seed: string,
+  ctx?: GenContext
 ): Promise<{ puzzle: Puzzle; source: "ai" | "fallback" }> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const p = await callOnce(mode, seed);
+      const p = await callOnce(mode, seed, ctx);
       if (p) return { puzzle: p, source: "ai" };
     } catch (err) {
       if (err instanceof Anthropic.APIError) {
