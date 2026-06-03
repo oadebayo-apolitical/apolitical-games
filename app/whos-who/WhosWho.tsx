@@ -36,9 +36,10 @@ export default function WhosWho({ initial }: { initial: Round }) {
   const [attempts, setAttempts] = useState(0);
   const [status, setStatus] = useState<Status>("playing");
   const [wrongFlash, setWrongFlash] = useState(false);
-  // Server verifies the photo before serving, but a client-side load can still
-  // fail (rate limit, flaky network) — fall back to the placeholder if so.
-  const [imgError, setImgError] = useState(false);
+  // Which image candidate we're on: 0 = preferred CDN thumbnail, 1 = deck
+  // Special:FilePath fallback, 2+ = exhausted → placeholder. Each onError
+  // advances to the next source.
+  const [imgIdx, setImgIdx] = useState(0);
 
   // Hint 0 is shown from the start; each wrong guess reveals the next.
   const revealed = Math.min(1 + attempts, round.hints.length);
@@ -77,7 +78,7 @@ export default function WhosWho({ initial }: { initial: Round }) {
     setAttempts(0);
     setStatus("playing");
     setPhase("playing");
-    setImgError(false);
+    setImgIdx(0);
   }, []);
 
   // Move to the next person. Skips any candidate identical to the current
@@ -162,19 +163,28 @@ export default function WhosWho({ initial }: { initial: Round }) {
 
   const done = status !== "playing";
 
+  // Photo sources to try in order: preferred CDN thumbnail, then deck fallback.
+  const imgCandidates = round.image
+    ? [round.image.url, round.image.fallbackUrl].filter(
+        (u): u is string => !!u
+      )
+    : [];
+  const imgSrc = imgCandidates[imgIdx];
+
   return (
     <Frame title>
       <div className="ww">
         <div className="ww-frame">
-          {round.image && !imgError ? (
+          {imgSrc ? (
             <Image
-              src={round.image.url}
+              key={imgSrc}
+              src={imgSrc}
               alt={done ? round.name : "Mystery British personality"}
               fill
               sizes="340px"
               priority
               unoptimized
-              onError={() => setImgError(true)}
+              onError={() => setImgIdx((i) => i + 1)}
             />
           ) : (
             <span className="placeholder">
@@ -182,7 +192,7 @@ export default function WhosWho({ initial }: { initial: Round }) {
             </span>
           )}
         </div>
-        {round.image && !imgError && (
+        {round.image && imgSrc && (
           <a
             className="credit"
             href={round.image.pageUrl}

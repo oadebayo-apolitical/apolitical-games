@@ -8,7 +8,6 @@ import { writeProfile, fallbackFigure } from "./personality-generate";
 import { fetchExtract } from "./wikipedia";
 import { DECK, deckImageUrl, pickFromDeck } from "./deck";
 import { getServedPeople } from "./served-people-mongo";
-import { resolveImage } from "./person-image";
 import type { Round } from "./personality";
 import { wlog } from "./log";
 
@@ -46,17 +45,6 @@ export async function getRound(): Promise<Round> {
     }
 
     const extract = await fetchExtract(person.title);
-    // Verify a real photo loads before committing: CDN thumbnail first (fast,
-    // not rate-limited), then the deck's Special:FilePath. Skip if neither.
-    const imageUrl = await resolveImage([
-      extract?.thumbUrl,
-      deckImageUrl(person),
-    ]);
-    if (!imageUrl) {
-      wlog("image_miss", { name: person.name });
-      continue;
-    }
-
     const profile = await writeProfile(
       person.name,
       person.title,
@@ -66,6 +54,14 @@ export async function getRound(): Promise<Round> {
       wlog("profile_miss", { name: person.name });
       continue; // model unavailable/invalid — try another deck person
     }
+
+    // The browser loads the photo (from the user's IP, not our shared server
+    // IP, which Wikimedia rate-limits). Prefer the Wikipedia CDN thumbnail;
+    // the client falls back to the deck's Special:FilePath, then a placeholder.
+    const deckUrl = deckImageUrl(person);
+    const image = extract?.thumbUrl
+      ? { url: extract.thumbUrl, fallbackUrl: deckUrl }
+      : { url: deckUrl, fallbackUrl: null };
 
     await repo.remember({
       qid: person.qid,
@@ -81,7 +77,7 @@ export async function getRound(): Promise<Round> {
       acceptableAnswers: profile.acceptableAnswers,
       blurb: extract?.extract ?? "",
       image: {
-        url: imageUrl,
+        ...image,
         pageUrl: extract?.pageUrl ?? wikiPage(person.title),
       },
       source: "ai",

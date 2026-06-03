@@ -26,7 +26,9 @@ export interface Round {
   hints: string[];
   acceptableAnswers: string[];
   blurb: string;
-  image: { url: string; pageUrl: string } | null;
+  // `url` is the preferred photo (CDN thumbnail); `fallbackUrl` is a second
+  // source the client tries if the first fails to load in the browser.
+  image: { url: string; fallbackUrl: string | null; pageUrl: string } | null;
   source: "ai" | "fallback";
 }
 
